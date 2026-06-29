@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 生成物・実データ（雛形には含めない）
+sample_data.csv
+*.parquet
+DAT_ASCII_*.csv
+data/
+
+# OS
+.DS_Store
