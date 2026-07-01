@@ -80,3 +80,22 @@ def load_histdata_m1(path, tz_shift_hours=0, spike_sigma=8.0, verbose=True):
         df["timestamp"] = df["timestamp"] + pd.Timedelta(hours=tz_shift_hours)
     df = df[["timestamp", "open", "high", "low", "close", "volume"]]
     return _clean(df, spike_sigma, verbose)
+
+
+def resample_ohlc(df, rule, verbose=True):
+    """Resample a cleaned standard-form df (timestamp, OHLC[, volume]) to a
+    coarser bar size, e.g. "1h", "4h", "1D". Uses only closed-bar aggregation
+    (open=first, high=max, low=min, close=last), so no look-ahead is introduced.
+    Bars with no ticks in the window (e.g. weekend gaps) are dropped, not filled.
+    """
+    agg = {"open": "first", "high": "max", "low": "min", "close": "last"}
+    if "volume" in df.columns:
+        agg["volume"] = "sum"
+    out = (df.set_index("timestamp")
+             .resample(rule)
+             .agg(agg)
+             .dropna(subset=["open", "high", "low", "close"])
+             .reset_index())
+    if verbose:
+        print(f"[data] resampled to {rule}: {len(df):,} -> {len(out):,} bars")
+    return out

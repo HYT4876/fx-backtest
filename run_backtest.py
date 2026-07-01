@@ -7,6 +7,7 @@ Usage:
     python run_backtest.py data/usdjpy_1h.csv --strategy ma_cross
     python run_backtest.py data/usdjpy_1h.csv --strategy mean_reversion --risk-pct 1 --stop-pips 40
     python run_backtest.py data/eurusd_1h.csv --strategy breakout --pip-size 0.0001 --quote-rate 150
+    python run_backtest.py DAT_ASCII_USDJPY_M1_2025.csv --format histdata_m1 --tz-shift 14 --resample 1h
 
 Strategies: ma_cross | mean_reversion | breakout
 """
@@ -14,7 +15,7 @@ Strategies: ma_cross | mean_reversion | breakout
 import argparse
 import numpy as np
 
-from data import load_and_clean, load_histdata_m1
+from data import load_and_clean, load_histdata_m1, resample_ohlc
 from engine import run_backtest, BacktestConfig
 from costs import CostModel
 from strategy import MACrossStrategy, MeanReversionStrategy, BreakoutStrategy
@@ -63,6 +64,8 @@ def main():
                    help="standard CSV, or HistData.com Generic ASCII M1")
     p.add_argument("--tz-shift", type=float, default=0.0,
                    help="shift timestamps by N hours (HistData M1 is EST; align to your TZ)")
+    p.add_argument("--resample", default=None,
+                   help="resample to a coarser bar size before backtesting, e.g. 1h, 4h, 1D")
     p.add_argument("--account", type=float, default=300_000)
     p.add_argument("--risk-pct", type=float, default=1.0)
     p.add_argument("--stop-pips", type=float, default=50.0)
@@ -78,6 +81,8 @@ def main():
         df = load_histdata_m1(args.csv, tz_shift_hours=args.tz_shift)
     else:
         df = load_and_clean(args.csv)
+    if args.resample:
+        df = resample_ohlc(df, args.resample)
     config = BacktestConfig(
         account=args.account, risk_pct=args.risk_pct, stop_pips=args.stop_pips,
         pip_size=args.pip_size, quote_to_account_rate=args.quote_rate,
