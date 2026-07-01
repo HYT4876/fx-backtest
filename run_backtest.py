@@ -30,9 +30,11 @@ def build_strategy(name):
     raise ValueError(f"unknown strategy: {name}")
 
 
-def print_metrics(trades_df, start_balance):
+def print_metrics(trades_df, start_balance, summary=None):
     if trades_df.empty:
         print("  (取引なし — データ期間や戦略パラメータを確認)")
+        if summary and summary.get("skipped_leverage_cap"):
+            print(f"  レバ上限超でスキップ:   {summary['skipped_leverage_cap']}件（全エントリーがこれで消えた可能性）")
         return
     pnls = trades_df["net_pnl"].values
     wins, losses = pnls[pnls > 0], pnls[pnls < 0]
@@ -46,6 +48,8 @@ def print_metrics(trades_df, start_balance):
     print(f"  総損益(net):            {pnls.sum():,.0f}")
     print(f"  プロフィットファクター: {pf:.2f}" if np.isfinite(pf) else "  プロフィットファクター: ∞")
     print(f"  最大ドローダウン:       {dd.min():,.0f}")
+    if summary and summary.get("skipped_leverage_cap"):
+        print(f"  レバ上限超でスキップ:   {summary['skipped_leverage_cap']}件（機会損失として認識）")
     if pnls.mean() <= 0:
         print("  ⚠ 期待値がプラスでない（fx-project-rules: 採用しない）")
 
@@ -83,8 +87,8 @@ def main():
     )
     strat = build_strategy(args.strategy)
     print(f"\n=== バックテスト: {args.strategy}（コスト込み）===")
-    trades, _ = run_backtest(df, strat, config)
-    print_metrics(trades, args.account)
+    trades, summary = run_backtest(df, strat, config)
+    print_metrics(trades, args.account, summary)
 
 
 if __name__ == "__main__":

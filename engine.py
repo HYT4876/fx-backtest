@@ -42,6 +42,7 @@ def run_backtest(df, strategy, config: BacktestConfig):
 
     position = 0
     entry_price = entry_time = stop_price = units = None
+    skipped_leverage_cap = 0
 
     last_tradable = len(df) - 1  # we act on i+1, so loop i to len-2
     for i in range(strategy.warmup, last_tradable):
@@ -77,6 +78,7 @@ def run_backtest(df, strategy, config: BacktestConfig):
             units = pos["units"]
             if pos["exceeds_cap"]:
                 # respect the leverage cap; skip this entry rather than break the rule
+                skipped_leverage_cap += 1
                 position = 0
                 entry_price = None
                 continue
@@ -92,6 +94,7 @@ def run_backtest(df, strategy, config: BacktestConfig):
     summary = {
         "trades": len(trades_df),
         "total_net_pnl": float(trades_df["net_pnl"].sum()) if len(trades_df) else 0.0,
+        "skipped_leverage_cap": skipped_leverage_cap,
     }
     return trades_df, summary
 
