@@ -18,6 +18,7 @@ import numpy as np
 from data import load_and_clean, load_histdata_m1, resample_ohlc
 from engine import run_backtest, BacktestConfig
 from costs import CostModel
+from news import load_events_csv
 from strategy import MACrossStrategy, MeanReversionStrategy, BreakoutStrategy
 
 
@@ -51,6 +52,8 @@ def print_metrics(trades_df, start_balance, summary=None):
     print(f"  最大ドローダウン:       {dd.min():,.0f}")
     if summary and summary.get("skipped_leverage_cap"):
         print(f"  レバ上限超でスキップ:   {summary['skipped_leverage_cap']}件（機会損失として認識）")
+    if summary and summary.get("skipped_news"):
+        print(f"  ニュースでスキップ:     {summary['skipped_news']}件（新規エントリーのみ停止）")
     if pnls.mean() <= 0:
         print("  ⚠ 期待値がプラスでない（fx-project-rules: 採用しない）")
 
@@ -75,6 +78,11 @@ def main():
     p.add_argument("--spread-pips", type=float, default=0.5)
     p.add_argument("--slippage-pips", type=float, default=0.3)
     p.add_argument("--swap-per-10k", type=float, default=0.0)
+    p.add_argument("--events", default=None,
+                   help="calendar CSV (time,impact columns) to block new entries around "
+                        "high-impact events; timestamps must match the data's timezone")
+    p.add_argument("--news-before-min", type=float, default=30.0)
+    p.add_argument("--news-after-min", type=float, default=30.0)
     args = p.parse_args()
 
     if args.format == "histdata_m1":
@@ -83,12 +91,14 @@ def main():
         df = load_and_clean(args.csv)
     if args.resample:
         df = resample_ohlc(df, args.resample)
+    events = load_events_csv(args.events) if args.events else []
     config = BacktestConfig(
         account=args.account, risk_pct=args.risk_pct, stop_pips=args.stop_pips,
         pip_size=args.pip_size, quote_to_account_rate=args.quote_rate,
         costs=CostModel(spread_pips=args.spread_pips, slippage_pips=args.slippage_pips,
                         swap_per_10k_per_night=args.swap_per_10k,
                         pip_value_per_unit=args.pip_size * args.quote_rate),
+        events=events, news_before_min=args.news_before_min, news_after_min=args.news_after_min,
     )
     strat = build_strategy(args.strategy)
     print(f"\n=== バックテスト: {args.strategy}（コスト込み）===")

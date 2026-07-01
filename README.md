@@ -18,8 +18,10 @@ FX自動売買システムの土台。**ルックアヘッドを出さない**�
 | `costs.py` | スプレッド・スリッページ・手数料・スワップ（`backtest-cost-model` スキルと同ロジック）。 |
 | `data.py` | OHLCデータの読み込み＋クリーニング。標準CSVと HistData.com Generic ASCII M1 の両形式に対応。不正行スキップ・週末ギャップは埋めない・タイムゾーンシフト対応。 |
 | `walkforward.py` | 学習期間／検証期間に分けて前へずらす分割。 |
+| `news.py` | ニュースフィルター（`news-filter` スキルと同ロジック）。高インパクトイベント前後は新規エントリーのみ停止、損切り・手仕舞いは止めない。 |
 | `run_example.py` | 合成データで3戦略を比較するデモ。`sample_data.csv` も書き出す。 |
 | `run_backtest.py` | 実データCSVでバックテストを回すCLI。 |
+| `run_walkforward.py` | 実データで学習／検証を前へずらしながら回すCLI。 |
 
 ## 動かし方
 
@@ -58,6 +60,21 @@ python run_backtest.py DAT_ASCII_USDJPY_M1_2023.csv --format histdata_m1 --tz-sh
 - タイムゾーン：HistData M1 は EST（夏時間なし）。`--tz-shift` で自分の基準（JST等）に揃える。データ・ローソク足・`news-filter` のイベント時刻を必ず同一基準に。
 - 業者差：無料データは一般的なバックテスト用で、自分の業者の価格とは一致しない。最終検証は実際に使う業者のデータで行うのが理想。
 
+## ニュースフィルター（重要イベント前後の新規取引停止）
+
+`news.py` はカレンダーを取得しない。イベント一覧を `time,impact` 列のCSVで用意し、`--events` で渡す：
+
+```bash
+python run_backtest.py your_data.csv --strategy ma_cross --events calendar.csv \
+  --news-before-min 30 --news-after-min 30
+```
+
+- `calendar.csv` の `time` はデータと同じタイムゾーン基準（JST等）にすること。ズレは事故の元。
+- `impact` は `high`/`medium`/`low`。既定では `high` のみブロックする。
+- ブロックされるのは**新規エントリーだけ**。既存ポジションの損切り・シグナル手仕舞いは止まらない（ニュース中こそリスク管理を止めてはいけない）。
+- スキップ件数は `summary["skipped_leverage_cap"]` 同様 `summary["skipped_news"]`（CLIでも表示）で確認できる。
+- カレンダーの入手先と「何を高インパクトとみなすか」は `news-filter` スキルの `references/event_sources.md` を参照。
+
 ## 3つの戦略（型）
 
 | 戦略 | 哲学 | 効く相場 |
@@ -77,8 +94,8 @@ python run_backtest.py DAT_ASCII_USDJPY_M1_2023.csv --format histdata_m1 --tz-sh
 
 ## このあとの拡張（順序の目安）
 
-1. 実データを取り込む（`run_backtest.py` か `data.load_and_clean` 経由）。
-2. `news-filter` をエントリー条件に組み込む（重要イベント前後は新規取引停止）。
+1. ~~実データを取り込む（`run_backtest.py` か `data.load_and_clean` 経由）。~~ 完了（USD/JPY HistData M1で確認済み）
+2. ~~`news-filter` をエントリー条件に組み込む（重要イベント前後は新規取引停止）。~~ 完了（`news.py` / `--events`）
 3. `performance-metrics` で検証期間の成績を評価し、ウォークフォワードで安定性を確認。
 4. ショート対応・複数ポジション・複数通貨へ慎重に拡張（パラメータは増やしすぎない）。
 5. デモ口座で長期ペーパートレード → ごく小額の実運用 → 監視・キルスイッチ。

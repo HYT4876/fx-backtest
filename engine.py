@@ -7,6 +7,9 @@ Core discipline (from fx-project-rules):
   - Stop-loss is mandatory: every position carries a stop, sized so the loss
     equals the intended risk (see sizing.py).
   - Costs are always applied: gross PnL is passed through CostModel.net_pnl.
+  - News filter: if config.events is set, NEW entries are blocked around
+    high-impact events (see news.py). Stops and signal-flip exits still fire
+    during a blocked window — risk management never pauses for news.
 
 This is a SKELETON for learning and iteration — long-only, one position at a
 time, single instrument. Extend deliberately; keep parameters few to avoid
@@ -18,6 +21,7 @@ import pandas as pd
 
 from sizing import compute_position
 from costs import CostModel
+from news import is_blocked
 
 
 @dataclass
@@ -28,6 +32,9 @@ class BacktestConfig:
     pip_size: float = 0.01            # 0.01 for JPY pairs
     quote_to_account_rate: float = 1.0
     costs: CostModel = field(default_factory=CostModel)
+    events: list = field(default_factory=list)   # news-filter calendar (see news.py)
+    news_before_min: float = 30.0
+    news_after_min: float = 30.0
 
 
 def _nights(entry_time, exit_time):
@@ -43,6 +50,7 @@ def run_backtest(df, strategy, config: BacktestConfig):
     position = 0
     entry_price = entry_time = stop_price = units = None
     skipped_leverage_cap = 0
+    skipped_news = 0
 
     last_tradable = len(df) - 1  # we act on i+1, so loop i to len-2
     for i in range(strategy.warmup, last_tradable):
@@ -67,6 +75,16 @@ def run_backtest(df, strategy, config: BacktestConfig):
                 continue
 
         elif position == 0 and sig == 1:
+            # news-filter: block NEW entries around high-impact events (stops/exits
+            # above are never blocked — risk management must keep working around news)
+            if config.events:
+                blocked, _reason = is_blocked(
+                    nxt["timestamp"], config.events,
+                    config.news_before_min, config.news_after_min,
+                )
+                if blocked:
+                    skipped_news += 1
+                    continue
             # enter long at next bar's open
             entry_price = exec_open
             entry_time = nxt["timestamp"]
@@ -95,6 +113,7 @@ def run_backtest(df, strategy, config: BacktestConfig):
         "trades": len(trades_df),
         "total_net_pnl": float(trades_df["net_pnl"].sum()) if len(trades_df) else 0.0,
         "skipped_leverage_cap": skipped_leverage_cap,
+        "skipped_news": skipped_news,
     }
     return trades_df, summary
 
