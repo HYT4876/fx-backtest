@@ -41,7 +41,7 @@ def main():
     p = argparse.ArgumentParser(description="Walk-forward validation on a real OHLC CSV.")
     p.add_argument("csv")
     p.add_argument("--strategy", default="ma_cross",
-                   choices=["ma_cross", "mean_reversion", "breakout"])
+                   choices=["ma_cross", "mean_reversion", "breakout", "tokyo_fix"])
     p.add_argument("--format", default="standard", choices=["standard", "histdata_m1"])
     p.add_argument("--tz-shift", type=float, default=0.0)
     p.add_argument("--resample", default=None,

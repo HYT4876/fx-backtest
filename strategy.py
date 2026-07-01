@@ -14,8 +14,10 @@ mean-reversion enters when oversold but holds until price reverts to the mean.
 These edges are deliberately simple; they exist to exercise the engine. Per
 fx-project-rules, always ask "why does this make money?" before trusting any of
 them. They map to the three families discussed: trend-following, mean-reversion,
-breakout.
+breakout — plus one flow-based edge (TokyoFixDriftStrategy).
 """
+
+import pandas as pd
 
 
 class Strategy:
@@ -97,3 +99,33 @@ class BreakoutStrategy(Strategy):
         else:
             prior_low = history["low"].iloc[-(self.exit_lookback + 1):-1].min()
             return 0 if close < prior_low else 1
+
+
+class TokyoFixDriftStrategy(Strategy):
+    """Flow-based edge: real (non-speculative) demand — Japanese importers and
+    institutional investors converting foreign income — concentrates around
+    the daily Tokyo fixing (9:55 JST), historically nudging USD/JPY up into
+    it (Ito & Yamada, "Was the Forex Fixing Fair?", find a statistically
+    significant appreciation into the 9:55 JST fix). This is a documented
+    clock-time flow effect, not a fitted technical pattern.
+
+    Mechanical form (few parameters, no optimization): go long at the open of
+    the hourly bar leading into the fix, hold exactly one bar, flat otherwise.
+    With `entry_hour_jst=8` that's the 08:00 closed bar signalling entry at the
+    09:00 JST open, held through the 09:00-10:00 bar (spans the 9:55 fix).
+
+    Requires hourly (or finer) bars with timestamps already aligned to JST
+    (see --tz-shift / --resample 1h) — a naive UTC or EST timestamp here would
+    silently test the wrong hour.
+    """
+
+    warmup = 0
+
+    def __init__(self, entry_hour_jst=8):
+        if not 0 <= entry_hour_jst <= 23:
+            raise ValueError("entry_hour_jst must be 0-23")
+        self.entry_hour_jst = entry_hour_jst
+
+    def signal(self, history, position=0):
+        last_hour = pd.Timestamp(history["timestamp"].iloc[-1]).hour
+        return 1 if last_hour == self.entry_hour_jst else 0

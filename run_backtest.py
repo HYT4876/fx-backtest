@@ -8,8 +8,10 @@ Usage:
     python run_backtest.py data/usdjpy_1h.csv --strategy mean_reversion --risk-pct 1 --stop-pips 40
     python run_backtest.py data/eurusd_1h.csv --strategy breakout --pip-size 0.0001 --quote-rate 150
     python run_backtest.py DAT_ASCII_USDJPY_M1_2025.csv --format histdata_m1 --tz-shift 14 --resample 1h
+    python run_backtest.py DAT_ASCII_USDJPY_M1_2025.csv --format histdata_m1 --tz-shift 14 --resample 1h \
+        --strategy tokyo_fix  # requires JST-aligned hourly bars
 
-Strategies: ma_cross | mean_reversion | breakout
+Strategies: ma_cross | mean_reversion | breakout | tokyo_fix
 """
 
 import argparse
@@ -19,7 +21,7 @@ from data import load_and_clean, load_histdata_m1, resample_ohlc
 from engine import run_backtest, BacktestConfig
 from costs import CostModel
 from news import load_events_csv
-from strategy import MACrossStrategy, MeanReversionStrategy, BreakoutStrategy
+from strategy import MACrossStrategy, MeanReversionStrategy, BreakoutStrategy, TokyoFixDriftStrategy
 
 
 def build_strategy(name):
@@ -29,6 +31,8 @@ def build_strategy(name):
         return MeanReversionStrategy(window=50, entry_z=2.0, exit_z=0.0)
     if name == "breakout":
         return BreakoutStrategy(lookback=50, exit_lookback=20)
+    if name == "tokyo_fix":
+        return TokyoFixDriftStrategy(entry_hour_jst=8)
     raise ValueError(f"unknown strategy: {name}")
 
 
@@ -62,7 +66,7 @@ def main():
     p = argparse.ArgumentParser(description="Run a backtest on a real OHLC CSV.")
     p.add_argument("csv")
     p.add_argument("--strategy", default="ma_cross",
-                   choices=["ma_cross", "mean_reversion", "breakout"])
+                   choices=["ma_cross", "mean_reversion", "breakout", "tokyo_fix"])
     p.add_argument("--format", default="standard", choices=["standard", "histdata_m1"],
                    help="standard CSV, or HistData.com Generic ASCII M1")
     p.add_argument("--tz-shift", type=float, default=0.0,
