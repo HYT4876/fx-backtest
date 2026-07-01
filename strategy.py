@@ -129,3 +129,31 @@ class TokyoFixDriftStrategy(Strategy):
     def signal(self, history, position=0):
         last_hour = pd.Timestamp(history["timestamp"].iloc[-1]).hour
         return 1 if last_hour == self.entry_hour_jst else 0
+
+
+class CarryTrendStrategy(Strategy):
+    """Carry edge: holding a higher-yield currency long earns the interest-rate
+    differential (positive swap on USD/JPY while USD rates > JPY rates). The
+    edge is the risk premium for holding that position overnight, not a price
+    prediction — so the strategy's job is simply to STAY LONG as much as
+    possible to accrue swap, while a long trend filter steps aside during clear
+    downtrends (a large drawdown erases many nights of carry).
+
+    Mechanical form (one parameter): long while close is above its `trend_window`
+    moving average, flat otherwise. To actually test the carry hypothesis, run
+    with a realistic positive swap (costs.swap_per_10k_per_night > 0) — with
+    swap=0 this is just a slow long-only trend filter.
+    """
+
+    def __init__(self, trend_window=200):
+        if trend_window < 2:
+            raise ValueError("trend_window must be >= 2")
+        self.trend_window = trend_window
+        self.warmup = trend_window
+
+    def signal(self, history, position=0):
+        if len(history) < self.trend_window:
+            return 0
+        closes = history["close"]
+        sma = closes.iloc[-self.trend_window:].mean()
+        return 1 if closes.iloc[-1] > sma else 0

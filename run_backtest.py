@@ -10,8 +10,10 @@ Usage:
     python run_backtest.py DAT_ASCII_USDJPY_M1_2025.csv --format histdata_m1 --tz-shift 14 --resample 1h
     python run_backtest.py DAT_ASCII_USDJPY_M1_2025.csv --format histdata_m1 --tz-shift 14 --resample 1h \
         --strategy tokyo_fix  # requires JST-aligned hourly bars
+    python run_backtest.py DAT_ASCII_USDJPY_M1_2025.csv --format histdata_m1 --tz-shift 14 --resample 1h \
+        --strategy carry --swap-per-10k 100  # carry needs a realistic positive swap
 
-Strategies: ma_cross | mean_reversion | breakout | tokyo_fix
+Strategies: ma_cross | mean_reversion | breakout | tokyo_fix | carry
 """
 
 import argparse
@@ -21,7 +23,8 @@ from data import load_and_clean, load_histdata_m1, resample_ohlc
 from engine import run_backtest, BacktestConfig
 from costs import CostModel
 from news import load_events_csv
-from strategy import MACrossStrategy, MeanReversionStrategy, BreakoutStrategy, TokyoFixDriftStrategy
+from strategy import (MACrossStrategy, MeanReversionStrategy, BreakoutStrategy,
+                      TokyoFixDriftStrategy, CarryTrendStrategy)
 
 
 def build_strategy(name):
@@ -33,6 +36,8 @@ def build_strategy(name):
         return BreakoutStrategy(lookback=50, exit_lookback=20)
     if name == "tokyo_fix":
         return TokyoFixDriftStrategy(entry_hour_jst=8)
+    if name == "carry":
+        return CarryTrendStrategy(trend_window=200)
     raise ValueError(f"unknown strategy: {name}")
 
 
@@ -66,7 +71,7 @@ def main():
     p = argparse.ArgumentParser(description="Run a backtest on a real OHLC CSV.")
     p.add_argument("csv")
     p.add_argument("--strategy", default="ma_cross",
-                   choices=["ma_cross", "mean_reversion", "breakout", "tokyo_fix"])
+                   choices=["ma_cross", "mean_reversion", "breakout", "tokyo_fix", "carry"])
     p.add_argument("--format", default="standard", choices=["standard", "histdata_m1"],
                    help="standard CSV, or HistData.com Generic ASCII M1")
     p.add_argument("--tz-shift", type=float, default=0.0,
