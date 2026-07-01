@@ -22,8 +22,14 @@ import pandas as pd
 _PRICE_COLS = ["open", "high", "low", "close"]
 
 
-def _clean(df, spike_sigma=8.0, verbose=True):
-    """Clean a DataFrame that already has standard columns."""
+def _clean(df, spike_sigma=8.0, verbose=True, drop_spikes=False):
+    """Clean a DataFrame that already has standard columns.
+
+    spike_flag marks bad ticks but does NOT remove them by default — a
+    flagged bar's low/high can still trigger a stop-loss in engine.py's
+    intrabar check. Pass drop_spikes=True to exclude flagged rows once
+    you've confirmed they're bad ticks rather than genuine moves
+    (data-cleaning skill: prefer keeping data when unsure)."""
     n0 = len(df)
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
@@ -41,16 +47,20 @@ def _clean(df, spike_sigma=8.0, verbose=True):
     ret = df["close"].pct_change()
     sigma = ret.std()
     df["spike_flag"] = (ret.abs() > spike_sigma * sigma).fillna(False) if sigma and sigma > 0 else False
+    n_spikes = int(df["spike_flag"].sum())
+
+    if drop_spikes and n_spikes:
+        df = df[~df["spike_flag"]]
 
     df = df.reset_index(drop=True)
     if verbose and len(df):
+        spike_msg = f"{n_spikes} spike(s) dropped" if drop_spikes else f"{n_spikes} spike(s) flagged (not dropped)"
         print(f"[data] {n0:,} rows -> cleaned {len(df):,} "
-              f"({df['timestamp'].min()} .. {df['timestamp'].max()}), "
-              f"{int(df['spike_flag'].sum())} spike(s) flagged")
+              f"({df['timestamp'].min()} .. {df['timestamp'].max()}), {spike_msg}")
     return df
 
 
-def load_and_clean(csv_path, spike_sigma=8.0, verbose=True):
+def load_and_clean(csv_path, spike_sigma=8.0, verbose=True, drop_spikes=False):
     """Load a standard CSV (timestamp, open, high, low, close[, volume])."""
     df = pd.read_csv(csv_path, on_bad_lines="skip")
     cols = {c.lower(): c for c in df.columns}
@@ -59,10 +69,10 @@ def load_and_clean(csv_path, spike_sigma=8.0, verbose=True):
     if missing:
         raise ValueError(f"CSV is missing required columns: {missing}")
     df = df.rename(columns={cols[c]: c for c in cols})
-    return _clean(df, spike_sigma, verbose)
+    return _clean(df, spike_sigma, verbose, drop_spikes)
 
 
-def load_histdata_m1(path, tz_shift_hours=0, spike_sigma=8.0, verbose=True):
+def load_histdata_m1(path, tz_shift_hours=0, spike_sigma=8.0, verbose=True, drop_spikes=False):
     """Load a HistData.com Generic ASCII M1 file and convert to standard form.
 
     Format: no header, datetime `YYYYMMDD HHMMSS`, then O;H;L;C;V. Separator is
@@ -79,7 +89,7 @@ def load_histdata_m1(path, tz_shift_hours=0, spike_sigma=8.0, verbose=True):
     if tz_shift_hours:
         df["timestamp"] = df["timestamp"] + pd.Timedelta(hours=tz_shift_hours)
     df = df[["timestamp", "open", "high", "low", "close", "volume"]]
-    return _clean(df, spike_sigma, verbose)
+    return _clean(df, spike_sigma, verbose, drop_spikes)
 
 
 def resample_ohlc(df, rule, verbose=True):

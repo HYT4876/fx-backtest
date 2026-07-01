@@ -46,6 +46,9 @@ def main():
     p.add_argument("--tz-shift", type=float, default=0.0)
     p.add_argument("--resample", default=None,
                    help="resample to a coarser bar size before splitting, e.g. 1h, 4h, 1D")
+    p.add_argument("--drop-spikes", action="store_true",
+                   help="exclude spike_flag rows (bad ticks) instead of just flagging them; "
+                        "off by default since a flagged bar could be a genuine move")
     p.add_argument("--train", type=int, default=2000, help="train window size in bars")
     p.add_argument("--test", type=int, default=500, help="test window size in bars")
     p.add_argument("--account", type=float, default=300_000)
@@ -64,9 +67,9 @@ def main():
     args = p.parse_args()
 
     if args.format == "histdata_m1":
-        df = load_histdata_m1(args.csv, tz_shift_hours=args.tz_shift)
+        df = load_histdata_m1(args.csv, tz_shift_hours=args.tz_shift, drop_spikes=args.drop_spikes)
     else:
-        df = load_and_clean(args.csv)
+        df = load_and_clean(args.csv, drop_spikes=args.drop_spikes)
     if args.resample:
         df = resample_ohlc(df, args.resample)
 

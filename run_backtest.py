@@ -69,6 +69,9 @@ def main():
                    help="shift timestamps by N hours (HistData M1 is EST; align to your TZ)")
     p.add_argument("--resample", default=None,
                    help="resample to a coarser bar size before backtesting, e.g. 1h, 4h, 1D")
+    p.add_argument("--drop-spikes", action="store_true",
+                   help="exclude spike_flag rows (bad ticks) instead of just flagging them; "
+                        "off by default since a flagged bar could be a genuine move")
     p.add_argument("--account", type=float, default=300_000)
     p.add_argument("--risk-pct", type=float, default=1.0)
     p.add_argument("--stop-pips", type=float, default=50.0)
@@ -86,9 +89,9 @@ def main():
     args = p.parse_args()
 
     if args.format == "histdata_m1":
-        df = load_histdata_m1(args.csv, tz_shift_hours=args.tz_shift)
+        df = load_histdata_m1(args.csv, tz_shift_hours=args.tz_shift, drop_spikes=args.drop_spikes)
     else:
-        df = load_and_clean(args.csv)
+        df = load_and_clean(args.csv, drop_spikes=args.drop_spikes)
     if args.resample:
         df = resample_ohlc(df, args.resample)
     events = load_events_csv(args.events) if args.events else []
